@@ -1,5 +1,6 @@
 package com.audacious_software.passive_data_kit;
 
+import android.app.ForegroundServiceStartNotAllowedException;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -43,8 +44,14 @@ public class ForegroundService extends Service {
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            this.startForeground(ForegroundService.NOTIFICATION_ID, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            try {
+                this.startForeground(ForegroundService.NOTIFICATION_ID, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } catch (ForegroundServiceStartNotAllowedException ex) {
+                PassiveDataKit.getInstance(this).nudgeMaintenanceDialogs();
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+              this.startForeground(ForegroundService.NOTIFICATION_ID, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             this.startForeground(ForegroundService.NOTIFICATION_ID, note);
         }
