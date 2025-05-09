@@ -178,7 +178,12 @@ public class Generators {
         if (this.mUserAgent == null) {
             String pdkName = this.mContext.getString(R.string.pdk_name);
             String pdkVersion = this.mContext.getString(R.string.pdk_version);
-            String appName = this.mContext.getString(this.mContext.getApplicationInfo().labelRes);
+
+            String appName = this.mContext.getString(R.string.app_name);
+
+            if (this.mContext.getApplicationInfo().labelRes != 0) {
+                appName = this.mContext.getString(this.mContext.getApplicationInfo().labelRes);
+            }
 
             String version = this.mContext.getString(R.string.unknown_version);
 

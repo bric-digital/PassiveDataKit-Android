@@ -27,7 +27,7 @@ public class AppChecker {
     Handler handler;
 
     public interface Listener {
-        void onForeground(String process);
+        void onForeground(String process, int runningAppCount);
     }
 
     public AppChecker() {
@@ -98,26 +98,26 @@ public class AppChecker {
                 for (String packageName : listeners.keySet()) {
                     if (packageName.equalsIgnoreCase(foregroundApp)) {
                         foundRegisteredPackageListener = true;
-                        callListener(listeners.get(foregroundApp), foregroundApp);
+                        callListener(listeners.get(foregroundApp), foregroundApp, foregroundApps.length);
                     }
                 }
 
                 if (!foundRegisteredPackageListener && unregisteredPackageListener != null) {
-                    callListener(unregisteredPackageListener, foregroundApp);
+                    callListener(unregisteredPackageListener, foregroundApp, foregroundApps.length);
                 }
             }
 
             if (anyPackageListener != null) {
-                callListener(anyPackageListener, foregroundApp);
+                callListener(anyPackageListener, foregroundApp, foregroundApps.length);
             }
         }
     }
 
-    void callListener(final Listener listener, final String packageName) {
+    void callListener(final Listener listener, final String packageName, int runningAppCount) {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                listener.onForeground(packageName);
+                listener.onForeground(packageName, runningAppCount);
             }
         });
     }

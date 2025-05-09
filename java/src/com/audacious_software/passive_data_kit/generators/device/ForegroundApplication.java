@@ -17,7 +17,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
-import android.util.Log;
 import android.view.Display;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -26,6 +25,8 @@ import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import androidx.collection.LongSparseArray;
 
 import com.audacious_software.passive_data_kit.PassiveDataKit;
 import com.audacious_software.passive_data_kit.activities.AppUsageSelectionActivity;
@@ -71,7 +72,7 @@ public class ForegroundApplication extends Generator{
     private static final String SAMPLE_INTERVAL = "com.audacious_software.passive_data_kit.generators.device.ForegroundApplication.SAMPLE_INTERVAL";
     private static final long SAMPLE_INTERVAL_DEFAULT = 15000;
 
-    private static final int DATABASE_VERSION = 7;
+    private static final int DATABASE_VERSION = 8;
 
     private static final String TABLE_HISTORY = "history";
     public static final String HISTORY_OBSERVED = "observed";
@@ -80,6 +81,8 @@ public class ForegroundApplication extends Generator{
     private static final String HISTORY_DURATION = "duration";
     private static final String HISTORY_SCREEN_ACTIVE = "screen_active";
     private static final String HISTORY_IS_HOME = "is_home";
+
+    private static final String HISTORY_RUNNING_APP_COUNT = "running_app_count";
 
     private static final String HISTORY_DISPLAY_STATE = "display_state";
     private static final String HISTORY_DISPLAY_STATE_OFF = "off";
@@ -121,6 +124,9 @@ public class ForegroundApplication extends Generator{
     private long mEarliestTimestamp = 0;
 
     private final HashMap<String, Long> mUsageDurations = new HashMap<>();
+
+    private HashMap<String, Integer> mOtherAppsRunning = new HashMap<>();
+
     private final HashMap<String, Integer> mUsageDaysCache = new HashMap<>();
     private final HashMap<String, String> mCategoryCache = new HashMap<>();
     private final HashMap<String, String> mIdentifierCache = new HashMap<>();
@@ -176,6 +182,8 @@ public class ForegroundApplication extends Generator{
                     this.mDatabase.execSQL(this.mContext.getString(R.string.pdk_generator_foreground_applications_create_substitutes_table));
                 case 6:
                     this.mDatabase.execSQL(this.mContext.getString(R.string.pdk_generator_foreground_applications_history_table_add_category));
+                case 7:
+                    this.mDatabase.execSQL(this.mContext.getString(R.string.pdk_generator_foreground_applications_history_table_add_running_app_count));
             }
 
             if (version != ForegroundApplication.DATABASE_VERSION) {
@@ -196,11 +204,11 @@ public class ForegroundApplication extends Generator{
         e.apply();
     }
 
-    private void logAppAppearance(String process, long when, long duration) {
+    private void logAppAppearance(String process, long when, long duration, final int runningAppCount) {
         String replacement = this.mSubstitutions.get(process);
 
         if (replacement != null) {
-            this.logAppAppearance(replacement, when, duration);
+            this.logAppAppearance(replacement, when, duration, runningAppCount);
 
             boolean replaceOriginal = false;
 
@@ -264,6 +272,8 @@ public class ForegroundApplication extends Generator{
 
                     values.put(ForegroundApplication.HISTORY_IS_HOME, isHome);
 
+                    values.put(ForegroundApplication.HISTORY_RUNNING_APP_COUNT, runningAppCount);
+
                     if (Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT) {
                         int state = display.getState();
 
@@ -306,6 +316,8 @@ public class ForegroundApplication extends Generator{
                     update.putBoolean(ForegroundApplication.HISTORY_SCREEN_ACTIVE, screenActive);
                     update.putBoolean(ForegroundApplication.HISTORY_IS_HOME, isHome);
 
+                    update.putInt(ForegroundApplication.HISTORY_RUNNING_APP_COUNT, runningAppCount);
+
                     if (values.containsKey(ForegroundApplication.HISTORY_DISPLAY_STATE)) {
                         update.putString(ForegroundApplication.HISTORY_DISPLAY_STATE, values.getAsString(ForegroundApplication.HISTORY_DISPLAY_STATE));
                     }
@@ -322,6 +334,7 @@ public class ForegroundApplication extends Generator{
 
                     for (String key : toDelete) {
                         me.mUsageDurations.remove(key);
+                        me.mOtherAppsRunning.remove(key);
                     }
                 }
             }
@@ -405,14 +418,14 @@ public class ForegroundApplication extends Generator{
         this.mAppChecker = new AppChecker();
         this.mAppChecker.whenAny(new AppChecker.Listener() {
             @Override
-            public void onForeground(final String process) {
+            public void onForeground(final String process, int runningAppCount) {
                 if (process == null) {
                     return;
                 }
 
                 final long now = System.currentTimeMillis();
 
-                me.logAppAppearance(process, now, sampleInterval);
+                me.logAppAppearance(process, now, sampleInterval, runningAppCount);
             }
         });
 
@@ -831,7 +844,6 @@ public class ForegroundApplication extends Generator{
         }
     }
 
-
     private void setAppEnabled(String packageName, boolean enabled) {
         SharedPreferences prefs = Generators.getInstance(this.mContext).getSharedPreferences(this.mContext);
         SharedPreferences.Editor e = prefs.edit();
@@ -1115,6 +1127,56 @@ public class ForegroundApplication extends Generator{
         }
 
         return this.mEarliestTimestamp;
+    }
+
+    public int fetchOtherRunningAppsCount(String packageName, long start, long end, boolean screenActive) {
+        String key = packageName + "-"  + start + "-" + end + "-" + screenActive;
+
+        if (this.mOtherAppsRunning.containsKey(key)) {
+            return this.mOtherAppsRunning.get(key);
+        }
+
+        int otherApps = 0;
+
+        if (this.mDatabase == null) {
+            return otherApps;
+        }
+
+        int isActive = 0;
+
+        if (screenActive) {
+            isActive = 1;
+        }
+
+        String where = ForegroundApplication.HISTORY_OBSERVED + " >= ? AND " + ForegroundApplication.HISTORY_OBSERVED + " < ? AND " + ForegroundApplication.HISTORY_SCREEN_ACTIVE + " = ? AND " + ForegroundApplication.HISTORY_APPLICATION + " = ?";
+        String[] args = { "" + start, "" + end, "" + isActive, packageName };
+
+        if (packageName == null) {
+            where = ForegroundApplication.HISTORY_OBSERVED + " >= ? AND " + ForegroundApplication.HISTORY_OBSERVED + " < ? AND " + ForegroundApplication.HISTORY_SCREEN_ACTIVE + " = ?";
+            args = new String[3];
+            args[0] = "" + start;
+            args[1] = "" + end;
+            args[2] = "" + isActive;
+        }
+
+        String[] columns = { ForegroundApplication.HISTORY_RUNNING_APP_COUNT, ForegroundApplication.HISTORY_OBSERVED };
+
+        Cursor c = this.mDatabase.query(ForegroundApplication.TABLE_HISTORY, columns, where, args, null, null, ForegroundApplication.HISTORY_RUNNING_APP_COUNT + " DESC");
+
+        int runningAppIndex = c.getColumnIndex(ForegroundApplication.HISTORY_RUNNING_APP_COUNT);
+        int observedIndex = c.getColumnIndex(ForegroundApplication.HISTORY_OBSERVED);
+
+        if (c.moveToNext()) {
+            otherApps = c.getInt(runningAppIndex);
+        }
+
+        c.close();
+
+        synchronized (this.mOtherAppsRunning) {
+            this.mOtherAppsRunning.put(key, otherApps);
+        }
+
+        return otherApps;
     }
 
     public long fetchUsageBetween(String packageName, long start, long end, boolean screenActive) {
