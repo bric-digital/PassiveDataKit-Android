@@ -110,7 +110,7 @@ android {
         api 'com.android.volley:volley:1.2.1'
         api 'com.google.guava:guava:33.4.8-android'
         api 'com.google.android.gms:play-services-auth:21.4.0'
-        api 'com.google.android.gms:play-services-fitness:21.2.0'
+        api 'com.google.android.gms:play-services-fitness:21.3.0'
         api 'com.google.android.gms:play-services-awareness:19.1.0'
         api 'com.google.firebase:firebase-messaging:25.0.0'
         api 'net.openid:appauth:0.11.1'

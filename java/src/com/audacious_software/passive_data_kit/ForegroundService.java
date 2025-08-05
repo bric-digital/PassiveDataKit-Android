@@ -51,7 +51,7 @@ public class ForegroundService extends Service {
                 PassiveDataKit.getInstance(this).nudgeMaintenanceDialogs();
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-              this.startForeground(ForegroundService.NOTIFICATION_ID, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+              this.startForeground(ForegroundService.NOTIFICATION_ID, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         } else {
             this.startForeground(ForegroundService.NOTIFICATION_ID, note);
         }
