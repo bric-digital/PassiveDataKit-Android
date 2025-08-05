@@ -23,7 +23,6 @@ import com.audacious_software.passive_data_kit.PassiveDataKit;
 import com.audacious_software.passive_data_kit.Toolbox;
 import com.audacious_software.passive_data_kit.generators.Generator;
 import com.audacious_software.passive_data_kit.generators.Generators;
-import com.audacious_software.passive_data_kit.generators.device.Location;
 import com.audacious_software.passive_data_kit.R;
 import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonFactory;
@@ -691,6 +690,9 @@ public class HttpTransmitter extends Transmitter implements Generators.Generator
                     return HttpTransmitter.RESULT_SUCCESS;
                 }
             } else {
+                Log.e("PassiveDataKit", this.mContext.getString(R.string.transmission_failed_server_code, code));
+                Log.e("PassiveDataKit", bodyString);
+
                 SharedPreferences.Editor e = prefs.edit();
                 e.putString(Transmitter.FAILURE_REASON, this.mContext.getString(R.string.transmission_failed_server_code, code));
                 e.putLong(Transmitter.FAILURE_TIMESTAMP, System.currentTimeMillis());
@@ -822,6 +824,11 @@ public class HttpTransmitter extends Transmitter implements Generators.Generator
     @Override
     public long pendingSize() {
         return HttpTransmitter.getFileSize(this.getPendingFolder());
+    }
+
+    @Override
+    public long pendingTransmissionSize() {
+        return this.pendingSize();
     }
 
     @Override
@@ -1209,6 +1216,7 @@ public class HttpTransmitter extends Transmitter implements Generators.Generator
         metadata.put(Generator.TIMEZONE, timeZone.getID());
         metadata.put(Generator.TIMEZONE_OFFSET, timeZone.getOffset(timestamp) / 1000);
 
+        /*
         if (includeLocation) {
             android.location.Location location = Location.getInstance(this.mContext).getLastKnownLocation();
 
@@ -1249,6 +1257,8 @@ public class HttpTransmitter extends Transmitter implements Generators.Generator
             testReading.put(Location.HISTORY_MOCK_LOCATION_APPS_COUNT, mockLocationApps.length());
             testReading.put(Location.HISTORY_MOCK_LOCATION_APPS, mockLocationApps);
         }
+
+         */
 
         testReading.put("passive-data-metadata", metadata);
 

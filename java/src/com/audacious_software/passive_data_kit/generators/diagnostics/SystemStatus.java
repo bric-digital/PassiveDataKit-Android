@@ -34,14 +34,12 @@ import android.view.accessibility.AccessibilityManager;
 import android.widget.TextView;
 
 import com.audacious_software.passive_data_kit.PassiveDataKit;
-import com.audacious_software.passive_data_kit.accessibility.AccessibilityEventsService;
 import com.audacious_software.passive_data_kit.activities.generators.DataPointViewHolder;
 import com.audacious_software.passive_data_kit.activities.generators.GeneratorViewHolder;
 import com.audacious_software.passive_data_kit.diagnostics.DiagnosticAction;
 import com.audacious_software.passive_data_kit.generators.Generator;
 import com.audacious_software.passive_data_kit.generators.Generators;
 import com.audacious_software.passive_data_kit.generators.communication.TextMessages;
-import com.audacious_software.passive_data_kit.generators.services.AccessibilityEvents;
 import com.audacious_software.passive_data_kit.transmitters.Transmitter;
 import com.audacious_software.passive_data_kit.R;
 import com.github.mikephil.charting.charts.LineChart;
@@ -349,12 +347,18 @@ public class SystemStatus extends Generator {
                 t.start();
 
                 AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-                PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(SystemStatus.ACTION_HEARTBEAT), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+                PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(SystemStatus.ACTION_HEARTBEAT), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                        (ContextCompat.checkSelfPermission(context, Manifest.permission.USE_EXACT_ALARM) == PackageManager.PERMISSION_GRANTED ||
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.SCHEDULE_EXACT_ALARM) == PackageManager.PERMISSION_GRANTED)) {
                     alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, now + me.mRefreshInterval, pi);
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                    alarms.setExact(AlarmManager.RTC_WAKEUP, now + me.mRefreshInterval, pi);
+                    if (alarms.canScheduleExactAlarms()) {
+                        alarms.setExact(AlarmManager.RTC_WAKEUP, now + me.mRefreshInterval, pi);
+                    } else {
+                        alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, now + me.mRefreshInterval, pi);
+                    }
                 } else {
                     alarms.set(AlarmManager.RTC_WAKEUP, now + me.mRefreshInterval, pi);
                 }
@@ -364,7 +368,8 @@ public class SystemStatus extends Generator {
         this.mReceiver.onReceive(this.mContext, null);
 
         IntentFilter filter = new IntentFilter(SystemStatus.ACTION_HEARTBEAT);
-        this.mContext.registerReceiver(this.mReceiver, filter);
+
+        ContextCompat.registerReceiver(this.mContext, this.mReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
 
         this.flushCachedData();
     }

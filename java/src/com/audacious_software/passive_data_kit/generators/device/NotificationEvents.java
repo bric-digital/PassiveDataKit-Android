@@ -8,6 +8,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
@@ -20,6 +21,7 @@ import android.service.notification.StatusBarNotification;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import com.audacious_software.passive_data_kit.PassiveDataKit;
 import com.audacious_software.passive_data_kit.activities.generators.RequestPermissionActivity;
@@ -82,6 +84,7 @@ public class NotificationEvents extends Generator {
     private SQLiteDatabase mDatabase = null;
 
     private long mLatestTimestamp = -1;
+    private String mLastNotificationString = "";
 
     @SuppressWarnings("unused")
     public static String generatorIdentifier() {
@@ -232,8 +235,6 @@ public class NotificationEvents extends Generator {
 
     public static class ListenerService extends NotificationListenerService {
         public void onNotificationPosted (StatusBarNotification sbn) {
-            Log.e("PDK", "onNotificationPosted: " + sbn);
-
             if (NotificationEvents.getInstance(this).isEnabled(this)) {
                 final NotificationEvents me = NotificationEvents.getInstance(this);
 
@@ -260,17 +261,21 @@ public class NotificationEvents extends Generator {
                 values.put(NotificationEvents.HISTORY_ACTION, NotificationEvents.HISTORY_ACTION_POSTED);
                 update.putString(NotificationEvents.HISTORY_ACTION, NotificationEvents.HISTORY_ACTION_POSTED);
 
-                if (me.mDatabase != null) {
-                    me.mDatabase.insert(NotificationEvents.TABLE_HISTORY, null, values);
-                }
+                String notificationString = values.get(NotificationEvents.HISTORY_PACKAGE) + "_" + values.get(NotificationEvents.HISTORY_ACTION) + "_" + values.get(NotificationEvents.HISTORY_REASON);
 
-                Generators.getInstance(this).notifyGeneratorUpdated(NotificationEvents.GENERATOR_IDENTIFIER, update);
+                if (me.mLastNotificationString.equals(notificationString) == false) {
+                    if (me.mDatabase != null) {
+                        me.mDatabase.insert(NotificationEvents.TABLE_HISTORY, null, values);
+                    }
+
+                    Generators.getInstance(this).notifyGeneratorUpdated(NotificationEvents.GENERATOR_IDENTIFIER, update);
+
+                    me.mLastNotificationString = notificationString;
+                }
             }
         }
 
         public void onNotificationRemoved (StatusBarNotification sbn) {
-            Log.e("PDK", "onNotificationRemoved: " + sbn);
-
             if (NotificationEvents.getInstance(this).isEnabled(this)) {
                 final NotificationEvents me = NotificationEvents.getInstance(this);
 
@@ -297,17 +302,21 @@ public class NotificationEvents extends Generator {
                 values.put(NotificationEvents.HISTORY_ACTION, NotificationEvents.HISTORY_ACTION_REMOVED);
                 update.putString(NotificationEvents.HISTORY_ACTION, NotificationEvents.HISTORY_ACTION_REMOVED);
 
-                if (me.mDatabase != null) {
-                    me.mDatabase.insert(NotificationEvents.TABLE_HISTORY, null, values);
-                }
+                String notificationString = values.get(NotificationEvents.HISTORY_PACKAGE) + "_" + values.get(NotificationEvents.HISTORY_ACTION) + "_" + values.get(NotificationEvents.HISTORY_REASON);
 
-                Generators.getInstance(this).notifyGeneratorUpdated(NotificationEvents.GENERATOR_IDENTIFIER, update);
+                if (me.mLastNotificationString.equals(notificationString) == false) {
+                    if (me.mDatabase != null) {
+                        me.mDatabase.insert(NotificationEvents.TABLE_HISTORY, null, values);
+                    }
+
+                    Generators.getInstance(this).notifyGeneratorUpdated(NotificationEvents.GENERATOR_IDENTIFIER, update);
+
+                    me.mLastNotificationString = notificationString;
+                }
             }
         }
 
         public void onNotificationRemoved (StatusBarNotification sbn, NotificationListenerService.RankingMap rankingMap, int reason) {
-            Log.e("PDK", "onNotificationRemoved[2]: " + sbn);
-
             if (NotificationEvents.getInstance(this).isEnabled(this)) {
                 final NotificationEvents me = NotificationEvents.getInstance(this);
 
@@ -429,20 +438,37 @@ public class NotificationEvents extends Generator {
                         break;
                 }
 
-                if (me.mDatabase != null) {
-                    me.mDatabase.insert(NotificationEvents.TABLE_HISTORY, null, values);
-                }
+                String notificationString = values.get(NotificationEvents.HISTORY_PACKAGE) + "_" + values.get(NotificationEvents.HISTORY_ACTION) + "_" + values.get(NotificationEvents.HISTORY_REASON);
 
-                Generators.getInstance(this).notifyGeneratorUpdated(NotificationEvents.GENERATOR_IDENTIFIER, update);
+                if (me.mLastNotificationString.equals(notificationString) == false) {
+                    if (me.mDatabase != null) {
+                        me.mDatabase.insert(NotificationEvents.TABLE_HISTORY, null, values);
+                    }
+
+                    Generators.getInstance(this).notifyGeneratorUpdated(NotificationEvents.GENERATOR_IDENTIFIER, update);
+
+                    me.mLastNotificationString = notificationString;
+                }
             }
         }
     }
 
     public static boolean areNotificationsEnabled(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED);
+        }
+
+        return true;
+    }
+
+    public static boolean areNotificationListenersEnabled(Context context) {
         NotificationManager notes = (NotificationManager) context.getApplicationContext().getSystemService(Context.NOTIFICATION_SERVICE);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            return notes.isNotificationListenerAccessGranted(new ComponentName(context, NotificationEvents.ListenerService.class));
+            boolean isEnabled = notes.isNotificationListenerAccessGranted(new ComponentName(context, NotificationEvents.ListenerService.class));
+
+            return isEnabled;
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             return notes.areNotificationsEnabled();
         }
@@ -469,10 +495,13 @@ public class NotificationEvents extends Generator {
     }
 
     public static void fetchPemissions(Context context) {
-        Intent intent = new Intent(context, RequestPermissionActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.putExtra(RequestPermissionActivity.PERMISSION, Manifest.permission.POST_NOTIFICATIONS);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent intent = new Intent(context, RequestPermissionActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-        context.startActivity(intent);
+            intent.putExtra(RequestPermissionActivity.PERMISSION, Manifest.permission.POST_NOTIFICATIONS);
+
+            context.startActivity(intent);
+        }
     }
 }

@@ -60,7 +60,7 @@ import humanize.Humanize;
 
 @SuppressWarnings({"PointlessBooleanExpression", "SimplifiableIfStatement"})
 @SuppressLint("Range")
-public class ForegroundApplication extends Generator{
+public class ForegroundApplication extends Generator {
     private static final String GENERATOR_IDENTIFIER = "pdk-foreground-application";
 
     private static final String ENABLED = "com.audacious_software.passive_data_kit.generators.device.ForegroundApplication.ENABLED";
@@ -714,7 +714,7 @@ public class ForegroundApplication extends Generator{
                 context.startActivity(new Intent(context, AppUsageSelectionActivity.class));
             }
         });
-   }
+    }
 
     @Override
     public List<Bundle> fetchPayloads() {
@@ -964,6 +964,10 @@ public class ForegroundApplication extends Generator{
             return true;
         }
 
+        if (disabledApps.contains("*")) {
+            return false;
+        }
+
         String category = this.mCategoryCache.get(process);
 
         if (category == null) {
@@ -1051,6 +1055,8 @@ public class ForegroundApplication extends Generator{
 
         return usages;
     }
+
+
 
     public int fetchUsageDaysBetween(long start, long end, boolean screenActive) {
         if (this.mDatabase == null) {
